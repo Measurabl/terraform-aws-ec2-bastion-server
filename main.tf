@@ -44,24 +44,33 @@ resource "aws_security_group" "default" {
 
   tags = module.label.tags
 
-  ingress {
-    protocol  = "tcp"
-    from_port = 22
-    to_port   = 22
-
-    cidr_blocks = var.allowed_cidr_blocks
-  }
-
-  ingress {
-    from_port       = 0
-    to_port         = 0
-    protocol        = -1
-    security_groups = var.security_groups
-  }
-
   lifecycle {
     create_before_destroy = true
   }
+}
+
+resource "aws_security_group_rule" "ssh_ingress" {
+  description = "ssh ingress"
+  type        = "ingress"
+  from_port   = 22
+  to_port     = 22
+  protocol    = "tcp"
+  cidr_blocks = var.allowed_cidr_blocks
+
+  security_group_id = aws_security_group.default.id
+}
+
+resource "aws_security_group_rule" "sg_ingress" {
+  for_each = toset(var.security_groups)
+
+  description              = "all ingress"
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = -1
+  source_security_group_id = each.value
+
+  security_group_id = aws_security_group.default.id
 }
 
 data "aws_route53_zone" "domain" {
@@ -100,11 +109,11 @@ resource "aws_instance" "default" {
 }
 
 module "dns" {
-  enabled   = var.zone_id != "" ? true : false
-  source    = "git::https://github.com/cloudposse/terraform-aws-route53-cluster-hostname.git?ref=tags/0.3.0"
-  name      = var.name
-  zone_id   = var.zone_id
-  ttl       = 60
-  records   = [aws_instance.default.public_dns]
+  enabled = var.zone_id != "" ? true : false
+  source  = "git::https://github.com/cloudposse/terraform-aws-route53-cluster-hostname.git?ref=tags/0.3.0"
+  name    = var.name
+  zone_id = var.zone_id
+  ttl     = 60
+  records = [aws_instance.default.public_dns]
 }
 
